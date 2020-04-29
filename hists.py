@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from matplotlib.colors import LogNorm, Normalize
 from ompy import Matrix
 from scipy.signal import find_peaks
@@ -10,6 +11,7 @@ from typing import Tuple, Dict
 from pathlib import Path
 from tqdm import tqdm
 import re
+from datetime import datetime
 
 from scipy.linalg import lstsq
 
@@ -181,19 +183,16 @@ def analysis_per_module(module="mod0"):
         d.mkdir(exist_ok=True)
 
     path = Path("hist")
-    files = [str(fn) for fn in path.iterdir() if fn.match(f"*_{module}.asc")]
-    files.sort(key=run_number_keys)
-    nruns = [len(files)]
-
-    files2 = [str(fn) for fn in path.iterdir() if fn.match(f"{module}_*.asc")]
-    files2.sort()
-    nruns += [len(files2)]
-    files += files2
+    files = [fn for fn in sorted(path.iterdir())
+             if fn.match(f"{module}_*.asc")]
+    times = [datetime.strptime(file.name, f"{module}_%Y%m%d-%H%M%S.asc")
+             for file in files]
 
     print("start loading files")
     runs = [read_data(fn, max_rows=4000) for fn in files]
     print(f"Analysing for {len(runs)} runs")
     ndets = 15
+
 
     # plot initial & calibrate roughly
     fig, ax = plt.subplots()
@@ -321,7 +320,6 @@ def analysis_per_module(module="mod0"):
                               post_region=[1365, 1370])
 
                 means[irun, det, :] = [px0["mean"], px1["mean"], px3["mean"]]
-
         np.save(fname, means)
 
     # plot all together
@@ -330,14 +328,22 @@ def analysis_per_module(module="mod0"):
     for i, ax in enumerate(axes.reshape(-1)):
         if i == ndets:
             break
-        ax.plot(means[:, i, 0]-means[:, i, 0].mean(), label="121", alpha=0.2)
-        ax.plot(means[:, i, 1]-means[:, i, 1].mean(), label="344", alpha=0.2)
-        ax.plot(means[:, i, 2]-means[:, i, 2].mean(), label="1333", alpha=0.2)
+        ms = 1
+        ax.plot(times, means[:, i, 0]-means[:, i, 0].mean(), "o",
+                label="121", alpha=0.2, markersize=ms)
+        ax.plot(times, means[:, i, 1]-means[:, i, 1].mean(), "o",
+                label="344", alpha=0.2, markersize=ms)
+        ax.plot(times, means[:, i, 2]-means[:, i, 2].mean(), "o",
+                label="1333", alpha=0.2, markersize=ms)
 
-        ax.axvline(nruns[0], color="k", linestyle="--")
+        # ax.axvline(nruns[0], color="k", linestyle="--")
         if i == 0:
             ax.legend()
         ax.text(0.7, 0.8, f'ch{i}', transform=ax.transAxes)
+
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d %b'))
+        ax.xaxis.set_major_locator(mdates.DayLocator())
+    fig.autofmt_xdate()
     fig.text(0.5, 0.04, 'runs', ha='center')
     fig.text(0.04, 0.5, 'position - mean(position) in keV', va='center',
              rotation='vertical')
@@ -375,7 +381,7 @@ def analysis_per_module(module="mod0"):
 
 
 if __name__ == "__main__":
-    # analysis_per_module("mod0")
+    analysis_per_module("mod0")
     analysis_per_module("mod1")
 
 
